@@ -43,6 +43,8 @@ function formatDate(dateStr) {
 // TODO [Basic] Ambil elemen kontainer incomeList dan expenseList dari DOM
 const incomeListEl = document.getElementById("incomeList");
 const expenseListEl = document.getElementById("expenseList");
+const incomePaginationEl = document.getElementById("incomePagination");
+const expensePaginationEl = document.getElementById("expensePagination");
 const balanceAmountEl = document.querySelector(
   ".tracker-summary__balance-amount",
 );
@@ -58,6 +60,9 @@ const monthFilterEl = document.getElementById("monthFilter");
 // Deklarasi searchKeyword di sini agar bisa diakses oleh renderTransactions()
 let searchKeyword = "";
 let selectedMonth = "";
+const itemsPerPage = 3;
+let incomePage = 1;
+let expensePage = 1;
 
 function getMonthKey(dateStr) {
   if (!dateStr) return "";
@@ -95,13 +100,77 @@ function getFilteredTransactions() {
   });
 }
 
+function renderPagination(container, page, totalPages, type) {
+  container.innerHTML = "";
+  if (totalPages <= 1) return;
+
+  const prevBtn = document.createElement("button");
+  prevBtn.classList.add("tracker-pagination__button");
+  prevBtn.textContent = "Sebelumnya";
+  prevBtn.disabled = page === 1;
+  prevBtn.addEventListener("click", () => {
+    if (type === "income") {
+      incomePage = Math.max(1, incomePage - 1);
+    } else {
+      expensePage = Math.max(1, expensePage - 1);
+    }
+    renderTransactions();
+  });
+
+  const nextBtn = document.createElement("button");
+  nextBtn.classList.add("tracker-pagination__button");
+  nextBtn.textContent = "Berikutnya";
+  nextBtn.disabled = page >= totalPages;
+  nextBtn.addEventListener("click", () => {
+    if (type === "income") {
+      incomePage = Math.min(totalPages, incomePage + 1);
+    } else {
+      expensePage = Math.min(totalPages, expensePage + 1);
+    }
+    renderTransactions();
+  });
+
+  const pageInfo = document.createElement("span");
+  pageInfo.classList.add("tracker-pagination__info");
+  pageInfo.textContent = `Halaman ${page} dari ${totalPages}`;
+
+  container.appendChild(prevBtn);
+  container.appendChild(pageInfo);
+  container.appendChild(nextBtn);
+}
+
 function renderTransactions() {
   incomeListEl.innerHTML = "";
   expenseListEl.innerHTML = "";
+  incomePaginationEl.innerHTML = "";
+  expensePaginationEl.innerHTML = "";
 
   const filtered = getFilteredTransactions();
+  const incomeItems = filtered.filter(t => t.type === "income");
+  const expenseItems = filtered.filter(t => t.type === "expense");
 
-  filtered.forEach(t => {
+  const incomeTotalPages = Math.max(
+    1,
+    Math.ceil(incomeItems.length / itemsPerPage),
+  );
+  const expenseTotalPages = Math.max(
+    1,
+    Math.ceil(expenseItems.length / itemsPerPage),
+  );
+
+  incomePage = Math.min(incomePage, incomeTotalPages);
+  expensePage = Math.min(expensePage, expenseTotalPages);
+
+  const visibleIncome = incomeItems.slice(
+    (incomePage - 1) * itemsPerPage,
+    incomePage * itemsPerPage,
+  );
+  const visibleExpense = expenseItems.slice(
+    (expensePage - 1) * itemsPerPage,
+    expensePage * itemsPerPage,
+  );
+
+  visibleIncome.forEach(t => {
     const isIncome = t.type === "income";
 
     const item = document.createElement("div");
@@ -182,12 +251,94 @@ function renderTransactions() {
     item.appendChild(detail);
     item.appendChild(right);
 
-    if (t.type === "income") {
-      incomeListEl.appendChild(item);
-    } else {
-      expenseListEl.appendChild(item);
-    }
+    incomeListEl.appendChild(item);
   });
+
+  visibleExpense.forEach(t => {
+    const item = document.createElement("div");
+    item.classList.add("tracker-transaction-item");
+    item.setAttribute("data-testid", "transactionItem");
+
+    const icon = document.createElement("div");
+    icon.classList.add(
+      "tracker-transaction-item__icon",
+      "tracker-transaction-item__icon--expense",
+    );
+    icon.textContent = "↓";
+
+    const detail = document.createElement("div");
+    detail.classList.add("tracker-transaction-item__detail");
+
+    const title = document.createElement("h3");
+    title.classList.add("tracker-transaction-item__title");
+    title.setAttribute("data-testid", "transactionItemTitle");
+    title.textContent = t.title;
+
+    const date = document.createElement("p");
+    date.classList.add("tracker-transaction-item__date");
+    date.setAttribute("data-testid", "transactionItemDate");
+    date.textContent = "Tanggal: " + formatDate(t.date);
+
+    const type = document.createElement("p");
+    type.setAttribute("data-testid", "transactionItemType");
+    type.textContent = "Tipe: Pengeluaran";
+
+    detail.appendChild(title);
+    detail.appendChild(date);
+    detail.appendChild(type);
+
+    const right = document.createElement("div");
+    right.classList.add("tracker-transaction-item__right");
+
+    const amount = document.createElement("p");
+    amount.classList.add(
+      "tracker-transaction-item__amount",
+      "tracker-transaction-item__amount--expense",
+    );
+    amount.setAttribute("data-testid", "transactionItemAmount");
+    amount.textContent = "Nominal: " + formatRupiah(t.amount);
+
+    const actions = document.createElement("div");
+    actions.classList.add("tracker-transaction-item__actions");
+
+    const editBtn = document.createElement("button");
+    editBtn.classList.add("tracker-transaction-item__btn");
+    editBtn.textContent = "Edit";
+    editBtn.addEventListener("click", () => handleEdit(t.id));
+
+    const changeTypeBtn = document.createElement("button");
+    changeTypeBtn.classList.add("tracker-transaction-item__btn");
+    changeTypeBtn.setAttribute("data-testid", "transactionItemEditTypeButton");
+    changeTypeBtn.textContent = "Ubah Tipe";
+    changeTypeBtn.addEventListener("click", () => handleChangeType(t.id));
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.classList.add("tracker-transaction-item__btn");
+    deleteBtn.setAttribute("data-testid", "transactionItemDeleteButton");
+    deleteBtn.textContent = "Hapus";
+    deleteBtn.addEventListener("click", () => handleDelete(t.id));
+
+    actions.appendChild(editBtn);
+    actions.appendChild(changeTypeBtn);
+    actions.appendChild(deleteBtn);
+
+    right.appendChild(amount);
+    right.appendChild(actions);
+
+    item.appendChild(icon);
+    item.appendChild(detail);
+    item.appendChild(right);
+
+    expenseListEl.appendChild(item);
+  });
+
+  renderPagination(incomePaginationEl, incomePage, incomeTotalPages, "income");
+  renderPagination(
+    expensePaginationEl,
+    expensePage,
+    expenseTotalPages,
+    "expense",
+  );
 }
 
 // TODO [Basic] Tambahkan event listener 'submit' pada form, panggil e.preventDefault() di dalamnya
@@ -246,6 +397,8 @@ form.addEventListener("submit", e => {
 
   saveToStorage();
   form.reset();
+  incomePage = 1;
+  expensePage = 1;
 
   /**
    * TODO [Advanced]:
@@ -258,6 +411,8 @@ form.addEventListener("submit", e => {
 
 monthFilterEl.addEventListener("change", () => {
   selectedMonth = monthFilterEl.value;
+  incomePage = 1;
+  expensePage = 1;
   currentMonthLabelEl.textContent = selectedMonth
     ? formatMonthLabel(selectedMonth)
     : "Semua Bulan";
@@ -372,12 +527,16 @@ const searchForm = document.getElementById("searchTransactionForm");
 
 searchInput.addEventListener("input", () => {
   searchKeyword = searchInput.value;
+  incomePage = 1;
+  expensePage = 1;
   renderTransactions();
 });
 
 searchForm.addEventListener("submit", e => {
   e.preventDefault();
   searchKeyword = searchInput.value;
+  incomePage = 1;
+  expensePage = 1;
   renderTransactions();
 });
 
